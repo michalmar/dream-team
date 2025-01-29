@@ -95,7 +95,7 @@ if 'session_id' not in st.session_state:
 if 'planned' not in st.session_state:
     st.session_state.planned = False
 st.set_page_config(layout="wide")
-st.write("### Dream Team powered by Magentic 1")
+st.write("### Dream Team powered by AutoGen")
 
 
 @st.dialog("Add agent")
@@ -133,9 +133,11 @@ def add_rag_agent(item = None):
     agent_type = "RAG"
     agent_name = st.text_input("Name", value="RAGAgent")
     # system_message = st.text_area("System Message", value=None)
-    description = st.text_area("Description", value=MAGENTIC_ONE_RAG_DESCRIPTION)
+    # description = st.text_area("Description", value=MAGENTIC_ONE_RAG_DESCRIPTION)
+    # TODO remove
+    description = st.text_area("Description", value="An agent that has access to a knowledge base of International Energy Agency (IEA) Analysis and forecast to 2030 and OPEC Monthly Oil Market Report as of January 2025 and can handle RAG tasks, call this agent if you are getting questions on your knowledge base")
 
-    index_name = st.text_input("Index Name", value=None)
+    index_name = st.text_input("Index Name", value="vector-autogen-rag")
         
     if st.button("Submit"):
         # st.session_state.vote = {"item": item, "reason": reason}
@@ -209,8 +211,8 @@ with st.sidebar:
 
     with st.expander("Settings", expanded=False):
         # st.caption("Settings:")
-        st.session_state.max_rounds = st.number_input("Max Rounds", min_value=1, value=50)
-        st.session_state.max_time = st.number_input("Max Time (Minutes)", min_value=1, value=10)
+        st.session_state.max_rounds = st.number_input("Max Rounds", min_value=1, value=100)
+        st.session_state.max_time = st.number_input("Max Time (Minutes)", min_value=1, value=30)
         st.session_state.max_stalls_before_replan = st.number_input("Max Stalls Before Replan", min_value=1, max_value=10, value=5)
         st.session_state.return_final_answer = st.checkbox("Return Final Answer", value=True)
 
@@ -263,10 +265,12 @@ if not st.session_state['running']:
             if st.button("Add RAG Agent", type="primary", icon="➕"):
                 add_rag_agent("A")
                 
+    # TODO remove - testing record for RAG
     # Define predefined values
     predefined_values = [
         # "how do I setup my Surface?",
         # "Generate a python script to print and execute Fibonacci series below 1000",
+        "Act as a multi-agent system that harnesses advanced financial modeling, scenario analysis, geopolitical forecasting, and risk quantification to produce a comprehensive, data-driven assessment of current market forecasts, commodity price trends, and OPEC announcements. In this process, identify and deeply evaluate the relative growth potential of various upstream investment areas—ranging from unconventional reservoirs to deepwater projects and advanced EOR techniques—across Africa, the Middle East, and Central Europe. Based on publicly available data (e.g., IEA, EIA, and OPEC bulletins), synthesize your findings into specific, country-level recommendations that incorporate ROI calculations, scenario-based risk assessments, and robust justifications reflecting both market and geopolitical considerations. Present the final deliverable as a well-structured table, demonstrating the rigor and depth of an analytical team’s extended research, including key assumptions, financial metrics, and any pivotal policy or infrastructural factors relevant to strategic decision-making.",
         "Find me a French restaurant in Dubai with 2 Michelin stars?",
         "When and where is the next game of Arsenal, print a link for purchase",
         "Based on your knowledge base how many taxes Elon Musk paid?",
@@ -417,7 +421,7 @@ async def display_log_message(log_entry, logs_dir, session_id, client = None):
         _timestamp = get_current_time()
 
         agent_icon = get_agent_icon(_source)
-        with st.expander(f"{agent_icon} {_source} @ {_timestamp}", expanded=True):
+        with st.expander(f"{agent_icon} {_source} @ {_timestamp}", expanded=False):
             st.write("Message:")
             st.write(_content[0])
             st.image(_content[1].image)
@@ -442,7 +446,7 @@ async def display_log_message(log_entry, logs_dir, session_id, client = None):
             SESSION_INFO.write(f"Session ID: `{st.session_state.session_id}`")
             PLAN_PLACE.write(plan_summary)
             st.session_state["planned"] = True
-        with st.expander(f"{agent_icon} {_source} @ {_timestamp}", expanded=True):
+        with st.expander(f"{agent_icon} {_source} @ {_timestamp}", expanded=False):
             st.write("Message:")
             st.write(_content)
 
@@ -460,7 +464,7 @@ async def display_log_message(log_entry, logs_dir, session_id, client = None):
         _timestamp = get_current_time()
 
         agent_icon = get_agent_icon(_source)
-        with st.expander(f"{agent_icon} {_source} @ {_timestamp}", expanded=True):
+        with st.expander(f"{agent_icon} {_source} @ {_timestamp}", expanded=False):
             st.write("Message:")
             st.write(_content)
         
@@ -508,7 +512,6 @@ async def main(task, logs_dir="./logs"):
     magentic_one = MagenticOneHelper(logs_dir=logs_dir, save_screenshots=st.session_state.save_screenshots, run_locally=st.session_state["run_mode_locally"])
     await magentic_one.initialize(agents=st.session_state.saved_agents)
     st.session_state.session_id = magentic_one.session_id
-    # Start the MagenticOne system
 
     stream = magentic_one.main(task = task)
    
