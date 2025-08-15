@@ -35,7 +35,7 @@ import { Footer } from '@/components/Footer'
 
 import { Agent, Team, useTeamsContext } from '@/contexts/TeamsContext';
 import { AlarmClock } from 'lucide-react'
-import { Card, CardHeader,CardContent, CardFooter} from "@/components/ui/card"
+import { Card, CardHeader,CardContent} from "@/components/ui/card"
 
 export default function GetStarted() {
   const { teams} = useTeamsContext();
