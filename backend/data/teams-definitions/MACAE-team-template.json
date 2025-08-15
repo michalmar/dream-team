@@ -1,0 +1,177 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Team Definition Schema",
+  "description": "JSON schema for team definition files in the dream-team application",
+  "type": "object",
+  "required": [
+    "id",
+    "team_id",
+    "name",
+    "status",
+    "created",
+    "created_by",
+    "agents"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the team (can be numeric string or UUID)"
+    },
+    "team_id": {
+      "type": "string",
+      "description": "Team identifier, usually in format 'team-{id}' or UUID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name of the team"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "visible",
+        "hidden"
+      ],
+      "description": "Visibility status of the team"
+    },
+    "protected": {
+      "type": "boolean",
+      "description": "Whether the team is protected from deletion/modification"
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the team was created"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "User or system that created the team"
+    },
+    "agents": {
+      "type": "array",
+      "description": "Array of agents that belong to this team",
+      "items": {
+        "type": "object",
+        "required": [
+          "input_key",
+          "type",
+          "name",
+          "icon"
+        ],
+        "properties": {
+          "input_key": {
+            "type": "string",
+            "description": "Unique key for the agent input"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MagenticOne",
+              "Custom",
+              "RAG",
+              "CustomMCP"
+            ],
+            "description": "Type of agent"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the agent"
+          },
+          "model_name": {
+            "type": "string",
+            "description": "Name of the model for this agent"
+          },
+          "use_mcp": {
+            "type": "boolean",
+            "description": "Allow agent to use MCP server"
+          },
+          "use_bing_grounding": {
+            "type": "boolean",
+            "description": "Allow agent to search the web with bing"
+          },
+          "system_message": {
+            "type": "string",
+            "description": "System message or prompt for the agent"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the agent's capabilities"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon identifier for the agent (e.g., Terminal, Globe, File)"
+          },
+          "use_rag": {
+            "type": "boolean",
+            "description": "Agent uses rag data "
+          },
+          "index_name": {
+            "type": "string",
+            "description": "Name of the index for RAG agents or knowledge base reference"
+          },
+          "index_endpoint": {
+            "type": "string",
+            "description": "Endpoint for the RAG connection "
+          },
+          "coding_tools": {
+            "type": "boolean",
+            "description": "Agent has coding capabilities"
+          }
+        }
+      }
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the team's purpose and capabilities"
+    },
+    "logo": {
+      "type": "string",
+      "description": "Icon identifier for the team logo"
+    },
+    "plan": {
+      "type": "string",
+      "description": "Plan or strategy description for the team"
+    },
+    "starting_tasks": {
+      "type": "array",
+      "description": "Array of predefined tasks that can be started with this team",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prompt",
+          "created",
+          "creator",
+          "logo"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the task"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the task"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt or instruction for the task"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the task was created"
+          },
+          "creator": {
+            "type": "string",
+            "description": "User or system that created the task"
+          },
+          "logo": {
+            "type": "string",
+            "description": "Icon identifier for the task"
+          }
+        }
+      }
+    }
+  }
+}

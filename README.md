@@ -85,7 +85,10 @@ python -m aisearch.py
 
 # Working locally  
 
-There are two parts to this project: the backend and the frontend. The backend is written in Python, and the frontend is written in JavaScript using React.
+There are two parts to this project: the backend and the frontend. The backend is written in Python, and the frontend is written in JavaScript using React. For more information about respective parts, please refer to the documentation.
+
+- 🦾 [Backend Documentation](./docs/backend.md)
+- 🦾 [Frontend Documentation](./docs/frontend.md)
 
 ## Backend
 
