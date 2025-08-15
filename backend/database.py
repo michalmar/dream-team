@@ -217,6 +217,48 @@ class CosmosDB:
             container.delete_item(item=item["id"], partition_key=item["user_id"])
         return True
 
+    def fetch_conversation_stats(self, start_date: str, end_date: str):
+        """
+        Returns daily counts of conversations for the given date range grouped by date (YYYY-MM-DD) and user.
+        Expects documents to have string timestamp in format 'YYYY-MM-DD HH:MM:SS'.
+        """
+        container = self.get_container("ag_demo")
+        # Fetch raw rows (no GROUP BY) and aggregate in Python to avoid cross-partition GROUP BY caveats
+        query = (
+            "SELECT c.user_id, SUBSTRING(c.timestamp, 0, 10) AS date "
+            "FROM c "
+            "WHERE SUBSTRING(c.timestamp, 0, 10) >= @startDate AND SUBSTRING(c.timestamp, 0, 10) <= @endDate"
+        )
+        parameters = [
+            {"name": "@startDate", "value": start_date},
+            {"name": "@endDate", "value": end_date},
+        ]
+        rows = list(
+            container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True,
+            )
+        )
+        # Aggregate in Python: {(user_id, date): count}
+        counts = {}
+        for r in rows:
+            user_id = r.get("user_id")
+            date = r.get("date")
+            if not user_id or not date:
+                continue
+            key = (user_id, date)
+            counts[key] = counts.get(key, 0) + 1
+
+        # Convert to list of dicts like: {"user_id": ..., "date": "YYYY-MM-DD", "count": N}
+        items = [
+            {"user_id": k[0], "date": k[1], "count": v}
+            for k, v in counts.items()
+        ]
+        # Optional: sort by date then user for stable ordering
+        items.sort(key=lambda d: (d["date"], d["user_id"]))
+        return items
+
     def create_team(self, team: dict):
         container = self.get_container("agent_teams")
         team_document = {

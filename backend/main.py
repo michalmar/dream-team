@@ -19,7 +19,7 @@ from magentic_one_helper import generate_session_name
 import aisearch
 import logging
 
-from datetime import datetime 
+from datetime import datetime, timedelta 
 from schemas import AutoGenMessage
 from typing import List
 import time
@@ -561,3 +561,32 @@ async def initialize_teams_api():
         return {"status": "success", "message": msg}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error initializing teams: {str(e)}")
+
+# New endpoint to retrieve conversation statistics (last 6 months, daily counts grouped by date and user)
+@app.get("/conversations/stats")
+async def conversation_stats():
+    try:
+        # Determine date range: last 6 months (approx. 180 days)
+        end_dt = datetime.utcnow().date()
+        start_dt = (end_dt - timedelta(days=180))
+        start_date = start_dt.strftime("%Y-%m-%d")
+        end_date = end_dt.strftime("%Y-%m-%d")
+
+        rows = app.state.db.fetch_conversation_stats(start_date=start_date, end_date=end_date)
+
+        # Build summary
+        total_runs = sum(r.get("count", 0) for r in rows)
+        users = {r.get("user_id") for r in rows}
+        # Response contract
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "buckets": rows,  # [{ user_id, date: 'YYYY-MM-DD', count }]
+            "summary": {
+                "total_runs": int(total_runs),
+                "unique_users": len(users),
+                "days": (end_dt - start_dt).days + 1,
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving stats: {str(e)}")

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AppSidebar } from "@/components/app-sidebar"
 import { useUserContext } from '@/contexts/UserContext'
 import {
@@ -49,6 +49,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { MarkdownRenderer } from '@/components/markdown-display';
 import { Footer } from '@/components/Footer'
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 
 const BASE_URL = import.meta.env.VITE_BASE_URL || "https://autogen-demo-be2.whiteground-dbb1b0b8.eastus.azurecontainerapps.io";
 const ALLWAYS_LOGGED_IN =
@@ -64,6 +65,9 @@ export default function PlaygroundHistory() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  // Stats state
+  const [stats, setStats] = useState<{ start_date: string; end_date: string; buckets: any[]; summary: { total_runs: number; unique_users: number; days: number } } | null>(null)
+  const [isStatsLoading, setIsStatsLoading] = useState(true)
 
   // New state for dialog display.
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -72,6 +76,23 @@ export default function PlaygroundHistory() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
   const [isConversationLoading, setIsConversationLoading] = useState(false);
   const { userInfo } = useUserContext();
+
+  // Build stacked chart data: one row per date, keys are user ids
+  const buildChartData = (buckets: any[]) => {
+    const map = new Map<string, any>()
+    const usersSet = new Set<string>()
+    for (const r of buckets) {
+      const d = r.date
+      const u = r.user_id
+      const c = r.count
+      usersSet.add(u)
+      if (!map.has(d)) map.set(d, { date: d })
+      map.get(d)[u] = c
+    }
+    // Sort by date ascending for a nicer chart
+    const arr = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
+    return { data: arr, users: Array.from(usersSet).sort() }
+  }
 
   // Updated function to fetch conversation details
   const handleShowDetails = async (userId: string, sessionId: string) => {
@@ -142,11 +163,51 @@ export default function PlaygroundHistory() {
     }
   };
 
+  // Fetch paginated history when user email changes
+  useEffect(() => {
+    if (userInfo.email) {
+      fetchHistory(userInfo.email)
+    }
+  }, [userInfo.email])
+
   const handleTeamSelect = (team: { team_id: string; agents: Agent[] }) => {
     // Update agents based on selected team from sidebar
     // setAgents(team.agents);
     console.log('Selected team:', team);
   }
+
+  async function fetchStats() {
+    try {
+      setIsStatsLoading(true)
+      console.log('Fetching stats at time:', new Date().toISOString())
+      const response = await axios.get(`${BASE_URL}/conversations/stats`)
+      setStats(response.data)
+    } catch (e) {
+      console.error('Failed to load stats:', e)
+    } finally {
+      setIsStatsLoading(false)
+    }
+  }
+
+  // Simple color palette cycling through CSS chart vars
+  const colorAt = (idx: number) => {
+    const palette = [
+      'hsl(var(--chart-1))',
+      'hsl(var(--chart-2))',
+      'hsl(var(--chart-3))',
+      'hsl(var(--chart-4))',
+      'hsl(var(--chart-5))',
+    ]
+    return palette[idx % palette.length]
+  }
+
+  // Fetch stats once on mount
+  const statsFetchedRef = useRef(false)
+  useEffect(() => {
+    if (statsFetchedRef.current) return
+    statsFetchedRef.current = true
+    fetchStats()
+  }, [])
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
@@ -155,14 +216,6 @@ export default function PlaygroundHistory() {
       ) : (
         <SidebarProvider defaultOpen={true}>
           <AppSidebar onTeamSelect={handleTeamSelect} />
-          {(() => {
-            useEffect(() => {
-              if (userInfo.email) {
-                fetchHistory(userInfo.email);
-              }
-            }, [userInfo.email]);
-            return null;
-          })()}
           <SidebarInset>
             <header className="flex sticky top-0 bg-background h-14 shrink-0 items-center gap-2 border-b px-4 z-10 shadow">
               <div className="flex items-center gap-2 px-4 w-full">
@@ -202,6 +255,58 @@ export default function PlaygroundHistory() {
             {/* Main content */}
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
               <Separator />
+              {/* Stats summary + chart */}
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle>Last 6 months usage</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isStatsLoading ? (
+                    <div className="flex items-center justify-center h-40">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    </div>
+                  ) : stats ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Total runs</div>
+                          <div className="text-2xl font-semibold">{stats.summary.total_runs}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">Unique users</div>
+                          <div className="text-2xl font-semibold">{stats.summary.unique_users}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">Range</div>
+                          <div className="text-2xl font-semibold">{stats.start_date} → {stats.end_date}</div>
+                        </div>
+                      </div>
+                      <div className="h-80">
+                        {(() => {
+                          const built = buildChartData(stats.buckets)
+                          const data = built.data
+                          const users = built.users
+                          return (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+                                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                <XAxis dataKey="date" tick={{ fontSize: 12 }} angle={-30} textAnchor="end" height={60} interval={Math.ceil(data.length / 12)} />
+                                <YAxis tick={{ fontSize: 12 }} />
+                                <RTooltip cursor={{ fill: 'hsl(var(--muted))' }} />
+                                {users.map((u, idx) => (
+                                  <Bar key={u} dataKey={u} stackId="runs" fill={colorAt(idx)} radius={[4, 4, 0, 0]} />
+                                ))}
+                              </BarChart>
+                            </ResponsiveContainer>
+                          )
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No stats available.</div>
+                  )}
+                </CardContent>
+              </Card>
               <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min">
                 {/* Chat Interface */}
                 <Card className="md:col-span-2 flex flex-col">
