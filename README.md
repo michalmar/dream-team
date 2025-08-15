@@ -8,7 +8,7 @@ This repository is a part of the Azure Samples collection and utilizes Microsoft
 
 ![Architecture](assets/architecture.png)
 
-:tada: August 15, 2025: Code refactoring and added support for exporting team definitions.
+:tada: August 15, 2025: Code refactoring and added support for exporting team definitions. Updated to AutoGen 0.7.2 [Release Notes](https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/index.html)
 
 :tada: February 25, 2025: We have a new React based UI with new business use cases
 
