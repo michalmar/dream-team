@@ -16,7 +16,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
-import {  RefreshCcw, Plus ,Loader2, Lock, Trash2 } from "lucide-react"
+import {  RefreshCcw, Plus ,Loader2, Lock, Trash2, Download } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
 import { AudioWaveform, ChartNoAxesCombined, DollarSign, Map, ShieldAlert, ShoppingBasket, Wrench } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -157,6 +157,34 @@ export default function Agents() {
       console.error('Error deleting team:', error);
       // TODO: Show error message to user
       await reloadTeams();
+    }
+  };
+
+  const downloadTeam = async (team: Team) => {
+    try {
+      const response = await fetch(`${BASE_URL}/teams/${team.team_id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Error downloading team: ${response.statusText}`);
+      }
+      const teamJson = await response.json();
+
+      const blob = new Blob([JSON.stringify(teamJson, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (team.name || team.team_id || 'team').replace(/[^a-z0-9-_]+/gi, '_');
+      a.download = `${safeName}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading team:', error);
     }
   };
 
@@ -355,6 +383,15 @@ export default function Agents() {
                             disabled={!!team.protected}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="ml-2"
+                            onClick={() => downloadTeam(team)}
+                            title="Download team"
+                          >
+                            <Download className="h-4 w-4" />
                           </Button>
                       </div>
                   </CardTitle>

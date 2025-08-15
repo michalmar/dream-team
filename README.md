@@ -8,6 +8,7 @@ This repository is a part of the Azure Samples collection and utilizes Microsoft
 
 ![Architecture](assets/architecture.png)
 
+:tada: August 15, 2025: Code refactoring and added support for exporting team definitions.
 
 :tada: February 25, 2025: We have a new React based UI with new business use cases
 

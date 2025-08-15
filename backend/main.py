@@ -483,6 +483,7 @@ async def upload_files(indexName: str = Form(...), files: List[UploadFile] = Fil
     return {"status": "success", "filenames": [f.filename for f in files]}
 
 from fastapi import HTTPException
+from team_export import convert_team_for_download
 
 @app.get("/teams")
 async def get_teams_api():
@@ -500,6 +501,20 @@ async def get_team_api(team_id: str):
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
         return team
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving team: {str(e)}")
+
+@app.post("/teams/{team_id}")
+async def download_team_api(team_id: str):
+    """Download a single team definition as JSON.
+    Returns the team object from the DB. The frontend will handle saving it as a file.
+    """
+    try:
+        team = app.state.db.get_team(team_id)
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        # Shape/filter the team representation for download
+        return convert_team_for_download(team)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving team: {str(e)}")
 
