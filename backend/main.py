@@ -65,6 +65,26 @@ MAGENTIC_ONE_DEFAULT_AGENTS = [
             },
             ]
 
+DEFAULT_SYS_PROMPT_MESSAGE_DECORATOR_ORCHESTRATOR = (
+        "You are a formatting engine for an AI orchestrator. "
+        "Clean and standardize the message for end-user display. Keep only useful content. "
+        "Rules:\n"
+        "1. If there is a plan with steps, output them as bullet points (- ). Single level only.\n"
+        "2. Preserve existing markdown code fences.\n"
+        "3. Bold any explicit tool invocation lines (e.g., lines starting with 'Tool:' or containing 'calling tool').\n"
+        "4. Remove redundant apologies or meta commentary.\n"
+        "5. Do not invent new steps not present in the original.\n"
+        "6. Do not invent or generate any new content like code or steps.\n"
+        "7. Plan is the main section make it H2, other section make collapsible and collapsed by default.\n"
+        "8. Use icons.\n"
+    )
+
+DEFAULT_SYS_PROMPT_MESSAGE_DECORATOR_WEBSURFER = (
+        "You are a formatting engine for an AI orchestrator. "
+        "Clean and standardize the message for end-user display. Keep only useful content. "
+        "Rules:\n"
+        "1. Summarize the content in a concise manner keep it brief.\n"
+    )
 # Lifespan handler for startup/shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -74,10 +94,18 @@ async def lifespan(app: FastAPI):
     logging.basicConfig(level=logging.WARNING,
                         format='%(levelname)s: %(asctime)s - %(message)s')
     print("Database initialized.")
+    # Initialize and cache OpenAI client (best-effort)
+    app.state.openai_client = None
+    try:
+        app.state.openai_client = await get_openai_client()
+        print("OpenAI client cached.")
+    except Exception as e:
+        print(f"Warning: Failed to initialize OpenAI client at startup: {e}")
     yield
     # Shutdown code (optional)
     # Cleanup database connection
     app.state.db = None
+    app.state.openai_client = None
 
 app = FastAPI(lifespan=lifespan)
 
@@ -117,8 +145,8 @@ async def get_openai_client():
     )
     
     return AsyncAzureOpenAI(
-        api_version="2024-12-01-preview",
-        # azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_version="2025-03-01-preview",
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         # azure_endpoint="https://aoai-eastus-mma-cdn.openai.azure.com/",
         azure_ad_token_provider=token_provider
     )
@@ -159,24 +187,120 @@ def get_agent_icon(agent_name) -> str:
         agent_icon = "🤖"
     return agent_icon
 
-async def summarize_plan(plan, client):
-    prompt = "You are a project manager."
-    text = f"""Summarize the plan for each agent into single-level only bullet points.
+def orchestrator_formatting_enabled() -> bool:
+    """Feature flag for orchestrator formatting (default ON)."""
+    val = os.getenv("ORCHESTRATOR_FORMAT_ENABLE", "true").lower()
+    return val in ("1", "true", "yes", "on")
 
-    Plan:
-    {plan}
+async def formatMessage(raw_content: str, system_prompt: str) -> str:
+    """Format MagenticOneOrchestrator messages using Azure OpenAI.
+
+    This function sends the raw orchestrator content to the model with a
+    focused system prompt that normalizes and improves readability.
+
+    Responsibilities (initial version):
+      - Trim excessive whitespace
+      - Preserve code blocks
+      - Convert numbered or multi-line plan steps into single-level bullet points
+      - Highlight tool calls (lines starting with Tool: or similar) using bold
+      - Keep response concise (< ~500 tokens target)
+
+    If any exception occurs, the original raw content (stringified) is returned
+    so logging/streaming never fails.
     """
-    
-    from autogen_core.models import UserMessage, SystemMessage
-    messages = [
-        UserMessage(content=text, source="user"),
-        SystemMessage(content=prompt)
-    ]
-    result = await client.create(messages)
-    # print(result.content)
-    
-    plan_summary = result.content
-    return plan_summary
+    try:
+        logger = logging.getLogger("formatter.orchestrator")
+        # Basic input metrics
+        input_preview = None
+        try:
+            if raw_content is not None:
+                _text = raw_content if isinstance(raw_content, str) else str(raw_content)
+                input_preview = (_text[:240] + "…") if len(_text) > 240 else _text
+        except Exception:
+            pass
+        logger.debug("Formatter invoked", extra={
+            "event": "start",
+            "input_preview": input_preview,
+        })
+        if raw_content is None:
+            return ""
+        # Ensure we operate on string
+        raw_text = raw_content if isinstance(raw_content, str) else str(raw_content)
+
+        # Feature flag check
+        if not orchestrator_formatting_enabled():
+            logger.debug("Formatter disabled via feature flag", extra={"event": "flag_disabled"})
+            return raw_text
+
+        # Reuse cached client if available else create on-demand
+        client = getattr(app.state, "openai_client", None)
+        if client is None:
+            logger.warning("OpenAI client not initialized; skipping formatting.", extra={
+                "event": "client_missing"
+            })
+            return raw_text + "\n\n[Formatter note: client not initialized; raw output shown.]"
+        else:
+            logger.debug("Using cached OpenAI client", extra={"event": "client_cached"})
+
+        # Use Chat Completions API (deprecated Responses removal)
+        logger.debug("Calling chat.completions.create", extra={
+            "event": "api_call_start",
+            "api": "chat.completions.create"
+        })
+        try:
+            chat_response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": raw_text},
+                ],
+                max_tokens=1200,
+                temperature=0.2,
+            )
+        except Exception as api_err:
+            logger.error("Chat completion API exception", extra={
+                "event": "api_call_error",
+                "api": "chat.completions.create",
+                "error": str(api_err)
+            })
+            return raw_text  # Fail open – return original content
+
+        formatted = ""
+        try:
+            if getattr(chat_response, "choices", None):
+                # Concatenate all non-empty choice message contents (usually first only)
+                parts = []
+                for ch in chat_response.choices:  # type: ignore[attr-defined]
+                    msg = getattr(ch, "message", None)
+                    if msg and getattr(msg, "content", None):
+                        parts.append(msg.content)
+                formatted = "\n".join(p.strip() for p in parts if p and p.strip()).strip()
+        except Exception as parse_err:
+            logger.warning("Failed parsing chat completion response; using raw text.", extra={
+                "event": "parse_fallback",
+                "error": str(parse_err)
+            })
+            return raw_text
+
+        if not formatted:
+            logger.info("Chat completion returned empty content; using raw text.", extra={
+                "event": "empty_output"
+            })
+            return raw_text
+        logger.debug("API call success", extra={
+            "event": "api_call_success",
+            "api": "chat.completions.create",
+            "output_chars": len(formatted)
+        })
+        return formatted
+    except Exception as e:
+        logging.getLogger("formatter.orchestrator").error("Formatter exception", extra={
+            "event": "exception",
+            "error": str(e)
+        })
+        return f"{raw_content if isinstance(raw_content, str) else str(raw_content)}\n\n[Formatting error: {e}]"
+
+
 async def display_log_message(log_entry, logs_dir, session_id, user_id, conversation=None):
     _log_entry_json = log_entry
     _user_id = user_id
@@ -198,13 +322,20 @@ async def display_log_message(log_entry, logs_dir, session_id, user_id, conversa
     elif isinstance(_log_entry_json, MultiModalMessage):
         _response.type = _log_entry_json.type
         _response.source = _log_entry_json.source
-        _response.content = _log_entry_json.content[0] # text wthout image
+        if _log_entry_json.source == "WebSurfer" and orchestrator_formatting_enabled():
+            _response.content = await formatMessage(_log_entry_json.content[0], DEFAULT_SYS_PROMPT_MESSAGE_DECORATOR_WEBSURFER)
+        else:
+            _response.content = _log_entry_json.content[0] # text without image
         _response.content_image = _log_entry_json.content[1].data_uri # TODO: base64 encoded image -> text / serialize
 
     elif isinstance(_log_entry_json, TextMessage):
         _response.type = _log_entry_json.type
         _response.source = _log_entry_json.source
+        # Base content assignment (may be overridden below for specific sources)
         _response.content = _log_entry_json.content
+        # Special formatting for orchestrator messages
+        if _log_entry_json.source == "MagenticOneOrchestrator" and orchestrator_formatting_enabled():
+            _response.content = await formatMessage(_log_entry_json.content, DEFAULT_SYS_PROMPT_MESSAGE_DECORATOR_ORCHESTRATOR)
         # Custom logic for Executor with base64 image
         if _log_entry_json.source == "Executor":
             import ast
