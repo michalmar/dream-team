@@ -203,7 +203,9 @@ class MagenticOneHelper:
                     client, 
                     agent["system_message"] + "\n\n in case of email use this address as TO: " + self.user_id, 
                     agent["description"],
-                    self.user_id
+                    self.user_id,
+                    message_suffix=" <--custom tag",
+                    decorate_once=False
                 )
                 agent_list.append(custom_agent)
                 print(f'{agent["name"]} (custom MCP) added!')
