@@ -55,6 +55,16 @@
   background-color: #f1f1f1;
 }
 
+.message blockquote {
+  font-size: 0.8rem;
+  /* font-style: italic; */
+  color: #666;
+  border-left: 4px solid #ddd;
+  margin: 0.4rem 0;
+  padding-left: 1rem;
+  text-align: left;
+}
+
 a {
   font-weight: 500;
   color: #646cff;
